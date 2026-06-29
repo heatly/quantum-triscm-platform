@@ -77,8 +77,23 @@ export function daysUntil(iso: string | null): number | null {
   return Math.ceil((new Date(iso).getTime() - Date.now()) / 86400000)
 }
 
+export function formatPercent(value: number): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "percent",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 1,
+  }).format(value / 100)
+}
+
 export function titleCase(value: string): string {
   return value
     .replace(/[_-]/g, " ")
     .replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
+export function getRiskColor(score: number): string {
+  if (score >= 80) return "bg-red-600"
+  if (score >= 60) return "bg-orange-500"
+  if (score >= 40) return "bg-yellow-500"
+  return "bg-green-600"
 }

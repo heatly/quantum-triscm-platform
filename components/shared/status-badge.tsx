@@ -151,3 +151,45 @@ export function RiskBadge({
     </Pill>
   )
 }
+
+export function StatusBadge({
+  status,
+}: {
+  status:
+    | JobStatus
+    | ConnectorStatus
+    | HealthStatus
+    | AckStatus
+    | "compliant"
+    | "non-compliant"
+    | "in-progress"
+    | "completed"
+    | "pending"
+    | "active"
+}) {
+  const toneMap: Record<string, Tone> = {
+    running: "info",
+    pending: "info",
+    completed: "success",
+    failed: "critical",
+    healthy: "success",
+    unhealthy: "critical",
+    warning: "warning",
+    connected: "success",
+    disconnected: "critical",
+    pending_approval: "info",
+    approved: "success",
+    rejected: "critical",
+    compliant: "success",
+    "non-compliant": "critical",
+    "in-progress": "info",
+    active: "info",
+  }
+
+  const tone = (toneMap[status as string] || "neutral") as Tone
+  return (
+    <Pill tone={tone} dot>
+      {titleCase(String(status))}
+    </Pill>
+  )
+}

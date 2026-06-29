@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useAppContext } from '@/components/shell/app-context'
+import { useAppState } from '@/components/shell/app-context'
 import { PageHeader } from '@/components/shared/page-header'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -16,7 +16,7 @@ import { Bell, Lock, Users, Palette, Zap, Shield, Cloud, Mail, CheckCircle2 } fr
 import { toast } from 'sonner'
 
 export default function SettingsPage() {
-  const { theme, setTheme } = useAppContext()
+  const { tenantId } = useAppState()
   const [orgName, setOrgName] = useState('Acme Security Corp')
   const [adminEmail, setAdminEmail] = useState('admin@acmesecurity.com')
   const [notificationsEmail, setNotificationsEmail] = useState('security-alerts@acmesecurity.com')
@@ -278,24 +278,7 @@ export default function SettingsPage() {
               <CardDescription>Customize how the platform looks</CardDescription>
             </CardHeader>
             <CardContent className='space-y-6'>
-              <FieldGroup>
-                <Field>
-                  <FieldLabel htmlFor='theme'>Theme</FieldLabel>
-                  <Select value={theme} onValueChange={setTheme}>
-                    <SelectTrigger id='theme'>
-                      <SelectValue placeholder='Select theme' />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectGroup>
-                        <SelectItem value='dark'>Dark</SelectItem>
-                        <SelectItem value='light'>Light</SelectItem>
-                        <SelectItem value='system'>System</SelectItem>
-                      </SelectGroup>
-                    </SelectContent>
-                  </Select>
-                  <FieldDescription>Choose your preferred color scheme</FieldDescription>
-                </Field>
-              </FieldGroup>
+
 
               <FieldSet>
                 <FieldLegend>Sidebar</FieldLegend>

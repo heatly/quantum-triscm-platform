@@ -31,7 +31,7 @@ export const navGroups: NavGroup[] = [
   {
     label: "Posture",
     items: [
-      { title: "Overview", href: "/overview", icon: LayoutDashboard, description: "Program-wide quantum posture summary" },
+      { title: "Overview", href: "/", icon: LayoutDashboard, description: "Program-wide quantum posture summary" },
       { title: "Tenants", href: "/tenants", icon: Building2, description: "Onboarding, connectors, and scope" },
     ],
   },

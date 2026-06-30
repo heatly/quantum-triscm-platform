@@ -3,128 +3,177 @@
 import { useCtEvents } from '@/lib/api/client'
 import { PageHeader } from '@/components/shared/page-header'
 import { DataState } from '@/components/shared/data-state'
+import { SeverityBadge } from '@/components/shared/status-badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { AlertTriangle } from 'lucide-react'
-import { formatNumber } from '@/lib/format'
+import { Button } from '@/components/ui/button'
+import { TriangleAlert, ExternalLink } from 'lucide-react'
+import { formatNumber, relativeTime } from '@/lib/format'
 
 export default function CTMonitorPage() {
-  const { data, isLoading, error } = useCtEvents()
-
-  const criticalCerts = data?.filter(e => e.daysUntilExpiry <= 30).length || 0
+  const { data, isLoading, error, refresh } = useCtEvents()
 
   return (
     <>
       <PageHeader
-        title='Certificate Transparency Monitor'
-        description='Monitor SSL/TLS certificates for domain hijacking and misuse'
+        title="Certificate Transparency Monitor"
+        description="Watch public CT logs for newly issued certificates matching your domains"
       />
 
-      <div className='space-y-4'>
-        {/* Alerts */}
-        {criticalCerts > 0 && (
-          <Alert className='border-destructive bg-destructive/5'>
-            <AlertTriangle className='size-4' />
-            <AlertDescription>
-              {criticalCerts} certificate(s) expiring within 30 days
-            </AlertDescription>
-          </Alert>
-        )}
+      <DataState
+        isLoading={isLoading}
+        error={error}
+        data={data}
+        onRetry={refresh}
+        isEmpty={(d) => d.events.length === 0}
+      >
+        {({ events, watchlist }) => {
+          const flagged = events.filter((e) => e.matchedWatchlist !== null)
+          const domains = new Set(events.map((e) => e.domain)).size
 
-        {/* Stats */}
-        <div className='grid gap-4 md:grid-cols-2 lg:grid-cols-4'>
-          <Card>
-            <CardHeader className='pb-2'>
-              <CardTitle className='text-sm font-medium'>Total Certificates</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className='text-2xl font-bold'>{formatNumber(data?.length || 0)}</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className='pb-2'>
-              <CardTitle className='text-sm font-medium'>Monitored Domains</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className='text-2xl font-bold'>{formatNumber(new Set(data?.map(d => d.domain) || []).size)}</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className='pb-2'>
-              <CardTitle className='text-sm font-medium'>Expiring Soon</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className='text-2xl font-bold text-orange-600'>{formatNumber(data?.filter(e => e.daysUntilExpiry <= 30 && e.daysUntilExpiry > 0).length || 0)}</p>
-              <p className='text-xs text-muted-foreground mt-1'>Within 30 days</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className='pb-2'>
-              <CardTitle className='text-sm font-medium'>Anomalies</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className='text-2xl font-bold text-red-600'>{formatNumber(data?.filter(e => e.anomalyFlag).length || 0)}</p>
-              <Badge className='mt-2 bg-red-600 text-xs'>Suspicious Activity</Badge>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Certificate List */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Monitored Certificates</CardTitle>
-            <CardDescription>SSL/TLS certificates from Certificate Transparency logs</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <DataState isLoading={isLoading} error={error} isEmpty={!data?.length}>
-              {data && data.length > 0 && (
-                <div className='overflow-x-auto'>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Domain</TableHead>
-                        <TableHead>Issuer</TableHead>
-                        <TableHead>Expires</TableHead>
-                        <TableHead>Days Left</TableHead>
-                        <TableHead>Status</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {data.map((cert, idx) => (
-                        <TableRow key={idx}>
-                          <TableCell className='font-medium'>{cert.domain}</TableCell>
-                          <TableCell className='text-sm'>{cert.issuer}</TableCell>
-                          <TableCell className='text-sm text-muted-foreground'>{cert.expiryDate}</TableCell>
-                          <TableCell>
-                            <Badge
-                              className={
-                                cert.daysUntilExpiry <= 0
-                                  ? 'bg-red-600'
-                                  : cert.daysUntilExpiry <= 30
-                                    ? 'bg-orange-600'
-                                    : 'bg-green-600'
-                              }
-                            >
-                              {cert.daysUntilExpiry <= 0 ? 'EXPIRED' : `${cert.daysUntilExpiry}d`}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            {cert.anomalyFlag && (
-                              <Badge className='bg-red-600'>Anomaly Detected</Badge>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
+          return (
+            <div className="flex flex-col gap-4">
+              {flagged.length > 0 && (
+                <Alert variant="destructive">
+                  <TriangleAlert />
+                  <AlertTitle>{flagged.length} certificate(s) matched a watchlist pattern</AlertTitle>
+                  <AlertDescription>
+                    Review newly issued certificates that match monitored domains for possible misissuance.
+                  </AlertDescription>
+                </Alert>
               )}
-            </DataState>
-          </CardContent>
-        </Card>
-      </div>
+
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium">CT Events</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="font-heading text-2xl font-semibold tabular-nums">
+                      {formatNumber(events.length)}
+                    </p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium">Unique Domains</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="font-heading text-2xl font-semibold tabular-nums">
+                      {formatNumber(domains)}
+                    </p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium">Watchlist Matches</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="font-heading text-2xl font-semibold tabular-nums text-destructive">
+                      {formatNumber(flagged.length)}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">Requires review</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium">Active Watchlist</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="font-heading text-2xl font-semibold tabular-nums">
+                      {formatNumber(watchlist.length)}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">Patterns monitored</p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <div className="grid gap-4 lg:grid-cols-3">
+                <Card className="lg:col-span-2">
+                  <CardHeader>
+                    <CardTitle>Recent CT Log Events</CardTitle>
+                    <CardDescription>Certificates observed in public Certificate Transparency logs</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Domain</TableHead>
+                            <TableHead>Issuer</TableHead>
+                            <TableHead>Seen</TableHead>
+                            <TableHead>Severity</TableHead>
+                            <TableHead>Match</TableHead>
+                            <TableHead className="text-right">Cert</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {events.map((event) => (
+                            <TableRow key={event.id}>
+                              <TableCell className="font-medium">{event.domain}</TableCell>
+                              <TableCell className="text-sm text-muted-foreground">{event.issuer}</TableCell>
+                              <TableCell className="text-sm text-muted-foreground">
+                                {relativeTime(event.timestamp)}
+                              </TableCell>
+                              <TableCell>
+                                <SeverityBadge severity={event.severity} />
+                              </TableCell>
+                              <TableCell>
+                                {event.matchedWatchlist ? (
+                                  <Badge variant="destructive">{event.matchedWatchlist}</Badge>
+                                ) : (
+                                  <span className="text-xs text-muted-foreground">—</span>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <Button
+                                  variant="ghost"
+                                  size="icon-sm"
+                                  aria-label="Open raw certificate"
+                                  render={
+                                    <a href={event.rawCertUrl} target="_blank" rel="noopener noreferrer">
+                                      <ExternalLink />
+                                    </a>
+                                  }
+                                />
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Watchlist</CardTitle>
+                    <CardDescription>Domain patterns under active monitoring</CardDescription>
+                  </CardHeader>
+                  <CardContent className="flex flex-col gap-2">
+                    {watchlist.map((entry) => (
+                      <div
+                        key={entry.id}
+                        className="flex items-center justify-between rounded-lg border border-border p-3"
+                      >
+                        <div className="flex flex-col">
+                          <span className="font-mono text-sm">{entry.pattern}</span>
+                          <span className="text-xs text-muted-foreground">
+                            Added {relativeTime(entry.createdAt)}
+                          </span>
+                        </div>
+                        <Badge variant="secondary">{formatNumber(entry.matches24h)} / 24h</Badge>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+          )
+        }}
+      </DataState>
     </>
   )
 }

@@ -4,10 +4,18 @@ import { useState } from 'react'
 import { useRemediation } from '@/lib/api/client'
 import { PageHeader } from '@/components/shared/page-header'
 import { DataState } from '@/components/shared/data-state'
-import { StatusBadge } from '@/components/shared/status-badge'
+import { SeverityBadge } from '@/components/shared/status-badge'
+import { Pill } from '@/components/shared/status-badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { Select, SelectContent, SelectItem, SelectGroup, SelectTrigger, SelectValue } from '@/components/ui/select'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectGroup,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -16,208 +24,237 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/co
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Progress } from '@/components/ui/progress'
 import { Separator } from '@/components/ui/separator'
-import { Search, CheckCircle2, Clock } from 'lucide-react'
-import { formatNumber } from '@/lib/format'
+import { Search } from 'lucide-react'
+import { formatNumber, formatDate, titleCase } from '@/lib/format'
+import type { RemediationState, RemediationTask } from '@/lib/types'
+
+type Tone = 'critical' | 'warning' | 'success' | 'info' | 'neutral' | 'accent'
+
+const stateTone: Record<RemediationState, Tone> = {
+  open: 'warning',
+  assigned: 'info',
+  in_progress: 'info',
+  awaiting_approval: 'accent',
+  approved: 'success',
+  rejected: 'critical',
+  deferred: 'neutral',
+  done: 'success',
+}
+
+function StateBadge({ state }: { state: RemediationState }) {
+  return <Pill tone={stateTone[state]}>{titleCase(state)}</Pill>
+}
 
 export default function RemediationPage() {
-  const { data, isLoading, error } = useRemediation()
+  const { data, isLoading, error, refresh } = useRemediation()
   const [searchTerm, setSearchTerm] = useState('')
-  const [priority, setPriority] = useState('all')
-
-  const filtered = data?.filter(t => {
-    const matchesSearch = t.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      t.finding.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesPriority = priority === 'all' || t.priority === priority
-    return matchesSearch && matchesPriority
-  }) || []
-
-  const taskStats = {
-    total: data?.length || 0,
-    completed: data?.filter(t => t.status === 'completed').length || 0,
-    inProgress: data?.filter(t => t.status === 'in-progress').length || 0,
-    pending: data?.filter(t => t.status === 'pending').length || 0,
-  }
-
-  const completionPercent = taskStats.total > 0 ? Math.round((taskStats.completed / taskStats.total) * 100) : 0
+  const [severity, setSeverity] = useState<string>('all')
 
   return (
     <>
       <PageHeader
-        title='Remediation Tracking'
-        description='Plan, assign, and track remediation of security findings'
+        title="Remediation Tracking"
+        description="Plan, assign, and track remediation of cryptographic findings"
       />
 
-      <div className='space-y-4'>
-        {/* Progress Overview */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Remediation Progress</CardTitle>
-            <CardDescription>Overall completion rate</CardDescription>
-          </CardHeader>
-          <CardContent className='space-y-4'>
-            <div>
-              <div className='flex items-center justify-between mb-2'>
-                <p className='text-sm font-medium'>Completion</p>
-                <span className='text-sm font-semibold'>{completionPercent}%</span>
-              </div>
-              <Progress value={completionPercent} className='h-3' />
-            </div>
-            <div className='grid gap-4 md:grid-cols-4'>
-              <div>
-                <p className='text-sm font-medium text-muted-foreground'>Total</p>
-                <p className='text-2xl font-bold'>{formatNumber(taskStats.total)}</p>
-              </div>
-              <div>
-                <p className='text-sm font-medium text-muted-foreground'>Completed</p>
-                <p className='text-2xl font-bold text-green-600'>{formatNumber(taskStats.completed)}</p>
-              </div>
-              <div>
-                <p className='text-sm font-medium text-muted-foreground'>In Progress</p>
-                <p className='text-2xl font-bold text-blue-600'>{formatNumber(taskStats.inProgress)}</p>
-              </div>
-              <div>
-                <p className='text-sm font-medium text-muted-foreground'>Pending</p>
-                <p className='text-2xl font-bold text-orange-600'>{formatNumber(taskStats.pending)}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+      <DataState
+        isLoading={isLoading}
+        error={error}
+        data={data}
+        onRetry={refresh}
+        isEmpty={(d) => d.length === 0}
+      >
+        {(tasks) => {
+          const filtered = tasks.filter((t) => {
+            const matchesSearch =
+              t.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+              t.description.toLowerCase().includes(searchTerm.toLowerCase())
+            const matchesSeverity = severity === 'all' || t.severity === severity
+            return matchesSearch && matchesSeverity
+          })
 
-        {/* Filters */}
-        <Card>
-          <CardContent className='pt-4'>
-            <div className='flex gap-2 flex-wrap'>
-              <div className='flex-1 min-w-64 flex gap-2'>
-                <Search className='size-4 text-muted-foreground flex-shrink-0 mt-2' />
-                <Input
-                  placeholder='Search remediation tasks...'
-                  value={searchTerm}
-                  onChange={e => setSearchTerm(e.target.value)}
-                  className='flex-1'
-                />
-              </div>
-              <Select value={priority} onValueChange={setPriority}>
-                <SelectTrigger className='w-48'>
-                  <SelectValue placeholder='Filter by priority' />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    <SelectItem value='all'>All Priorities</SelectItem>
-                    <SelectItem value='critical'>Critical</SelectItem>
-                    <SelectItem value='high'>High</SelectItem>
-                    <SelectItem value='medium'>Medium</SelectItem>
-                    <SelectItem value='low'>Low</SelectItem>
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
+          const isDone = (t: RemediationTask) => t.state === 'done' || t.state === 'approved'
+          const isActive = (t: RemediationTask) =>
+            t.state === 'in_progress' || t.state === 'assigned'
+          const isOpen = (t: RemediationTask) => t.state === 'open'
+
+          const stats = {
+            total: tasks.length,
+            done: tasks.filter(isDone).length,
+            active: tasks.filter(isActive).length,
+            open: tasks.filter(isOpen).length,
+          }
+          const completionPercent = stats.total ? Math.round((stats.done / stats.total) * 100) : 0
+
+          const renderList = (rows: RemediationTask[], subtitle: (t: RemediationTask) => string) => (
+            <div className="flex flex-col gap-2">
+              {rows.map((task) => (
+                <div
+                  key={task.id}
+                  className="flex items-center justify-between rounded-lg border border-border p-3"
+                >
+                  <div className="flex min-w-0 flex-col">
+                    <p className="truncate font-medium">{task.title}</p>
+                    <p className="truncate text-xs text-muted-foreground">{subtitle(task)}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <SeverityBadge severity={task.severity} />
+                    <StateBadge state={task.state} />
+                  </div>
+                </div>
+              ))}
             </div>
-          </CardContent>
-        </Card>
+          )
 
-        {/* Tabs */}
-        <Tabs defaultValue='all' className='w-full'>
-          <TabsList>
-            <TabsTrigger value='all'>All ({filtered.length})</TabsTrigger>
-            <TabsTrigger value='pending'>Pending ({filtered.filter(t => t.status === 'pending').length})</TabsTrigger>
-            <TabsTrigger value='in-progress'>In Progress ({filtered.filter(t => t.status === 'in-progress').length})</TabsTrigger>
-            <TabsTrigger value='completed'>Completed ({filtered.filter(t => t.status === 'completed').length})</TabsTrigger>
-          </TabsList>
+          return (
+            <div className="flex flex-col gap-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Remediation Progress</CardTitle>
+                  <CardDescription>Overall completion rate</CardDescription>
+                </CardHeader>
+                <CardContent className="flex flex-col gap-4">
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium">Completion</p>
+                      <span className="text-sm font-semibold tabular-nums">{completionPercent}%</span>
+                    </div>
+                    <Progress value={completionPercent} className="h-3" />
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-4">
+                    <Stat label="Total" value={stats.total} />
+                    <Stat label="Resolved" value={stats.done} className="text-emerald-500" />
+                    <Stat label="In Progress" value={stats.active} className="text-info" />
+                    <Stat label="Open" value={stats.open} className="text-warning" />
+                  </div>
+                </CardContent>
+              </Card>
 
-          <TabsContent value='all'>
-            <Card>
-              <CardContent className='pt-4'>
-                <DataState isLoading={isLoading} error={error} isEmpty={filtered.length === 0}>
-                  {filtered.length > 0 && (
-                    <div className='overflow-x-auto'>
+              <Card>
+                <CardContent className="pt-4">
+                  <div className="flex flex-wrap gap-2">
+                    <div className="flex min-w-64 flex-1 items-center gap-2 rounded-md border border-input px-3">
+                      <Search className="size-4 shrink-0 text-muted-foreground" />
+                      <Input
+                        placeholder="Search remediation tasks..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
+                      />
+                    </div>
+                    <Select value={severity} onValueChange={(v) => setSeverity(v ?? 'all')}>
+                      <SelectTrigger className="w-48">
+                        <SelectValue placeholder="Filter by severity" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          <SelectItem value="all">All Severities</SelectItem>
+                          <SelectItem value="critical">Critical</SelectItem>
+                          <SelectItem value="high">High</SelectItem>
+                          <SelectItem value="medium">Medium</SelectItem>
+                          <SelectItem value="low">Low</SelectItem>
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Tabs defaultValue="all" className="w-full">
+                <TabsList>
+                  <TabsTrigger value="all">All ({filtered.length})</TabsTrigger>
+                  <TabsTrigger value="open">Open ({filtered.filter(isOpen).length})</TabsTrigger>
+                  <TabsTrigger value="active">In Progress ({filtered.filter(isActive).length})</TabsTrigger>
+                  <TabsTrigger value="done">Resolved ({filtered.filter(isDone).length})</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="all">
+                  <Card>
+                    <CardContent className="overflow-x-auto pt-4">
                       <Table>
                         <TableHeader>
                           <TableRow>
                             <TableHead>Task</TableHead>
-                            <TableHead>Finding</TableHead>
-                            <TableHead>Priority</TableHead>
-                            <TableHead>Status</TableHead>
+                            <TableHead>Category</TableHead>
+                            <TableHead>Severity</TableHead>
+                            <TableHead>State</TableHead>
                             <TableHead>Owner</TableHead>
-                            <TableHead>Due Date</TableHead>
-                            <TableHead className='text-right'>Actions</TableHead>
+                            <TableHead>SLA Due</TableHead>
+                            <TableHead className="text-right">Details</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {filtered.map(task => (
+                          {filtered.map((task) => (
                             <TableRow key={task.id}>
-                              <TableCell className='font-medium max-w-xs truncate'>{task.title}</TableCell>
-                              <TableCell className='text-sm text-muted-foreground max-w-xs truncate'>{task.finding}</TableCell>
+                              <TableCell className="max-w-xs truncate font-medium">{task.title}</TableCell>
                               <TableCell>
-                                <Badge
-                                  className={
-                                    task.priority === 'critical'
-                                      ? 'bg-red-600'
-                                      : task.priority === 'high'
-                                        ? 'bg-orange-600'
-                                        : task.priority === 'medium'
-                                          ? 'bg-yellow-600'
-                                          : 'bg-blue-600'
-                                  }
-                                >
-                                  {task.priority}
-                                </Badge>
+                                <Badge variant="outline">{titleCase(task.category)}</Badge>
                               </TableCell>
                               <TableCell>
-                                <StatusBadge status={task.status} />
+                                <SeverityBadge severity={task.severity} />
                               </TableCell>
-                              <TableCell className='text-sm'>{task.owner}</TableCell>
-                              <TableCell className='text-sm text-muted-foreground'>{task.dueDate}</TableCell>
-                              <TableCell className='text-right'>
+                              <TableCell>
+                                <StateBadge state={task.state} />
+                              </TableCell>
+                              <TableCell className="text-sm">{task.owner ?? 'Unassigned'}</TableCell>
+                              <TableCell className="text-sm text-muted-foreground">
+                                {formatDate(task.slaDueAt)}
+                              </TableCell>
+                              <TableCell className="text-right">
                                 <Sheet>
-                                  <SheetTrigger asChild>
-                                    <Button variant='ghost' size='sm'>
-                                      View
-                                    </Button>
-                                  </SheetTrigger>
-                                  <SheetContent className='w-[600px]'>
+                                  <SheetTrigger
+                                    render={
+                                      <Button variant="ghost" size="sm">
+                                        View
+                                      </Button>
+                                    }
+                                  />
+                                  <SheetContent className="w-full sm:max-w-lg">
                                     <SheetHeader>
                                       <SheetTitle>{task.title}</SheetTitle>
                                     </SheetHeader>
-                                    <ScrollArea className='h-[calc(100vh-120px)] mt-4'>
-                                      <div className='space-y-4 pr-4'>
-                                        <div>
-                                          <p className='text-sm font-medium text-muted-foreground'>Status</p>
-                                          <StatusBadge status={task.status} />
+                                    <ScrollArea className="mt-4 h-[calc(100vh-120px)]">
+                                      <div className="flex flex-col gap-4 pr-4">
+                                        <div className="flex flex-col gap-1">
+                                          <p className="text-sm font-medium text-muted-foreground">State</p>
+                                          <StateBadge state={task.state} />
                                         </div>
                                         <Separator />
-                                        <div>
-                                          <p className='text-sm font-medium text-muted-foreground'>Priority</p>
-                                          <Badge className={
-                                            task.priority === 'critical'
-                                              ? 'bg-red-600'
-                                              : task.priority === 'high'
-                                                ? 'bg-orange-600'
-                                                : task.priority === 'medium'
-                                                  ? 'bg-yellow-600'
-                                                  : 'bg-blue-600'
-                                          }>
-                                            {task.priority}
-                                          </Badge>
+                                        <div className="flex flex-col gap-1">
+                                          <p className="text-sm font-medium text-muted-foreground">Severity</p>
+                                          <SeverityBadge severity={task.severity} />
                                         </div>
                                         <Separator />
-                                        <div>
-                                          <p className='text-sm font-medium text-muted-foreground'>Finding</p>
-                                          <p className='text-sm'>{task.finding}</p>
-                                        </div>
+                                        <Detail label="Category" value={titleCase(task.category)} />
                                         <Separator />
-                                        <div>
-                                          <p className='text-sm font-medium text-muted-foreground'>Owner</p>
-                                          <p className='text-sm'>{task.owner}</p>
-                                        </div>
+                                        <Detail label="Owner" value={task.owner ?? 'Unassigned'} />
                                         <Separator />
-                                        <div>
-                                          <p className='text-sm font-medium text-muted-foreground'>Due Date</p>
-                                          <p className='text-sm'>{task.dueDate}</p>
-                                        </div>
+                                        <Detail label="SLA Due" value={formatDate(task.slaDueAt)} />
+                                        {task.changeWindow && (
+                                          <>
+                                            <Separator />
+                                            <Detail label="Change Window" value={task.changeWindow} />
+                                          </>
+                                        )}
                                         <Separator />
-                                        <div>
-                                          <p className='text-sm font-medium text-muted-foreground'>Description</p>
-                                          <p className='text-sm'>{task.description}</p>
-                                        </div>
+                                        <Detail label="Description" value={task.description} />
+                                        {task.linkedAssets.length > 0 && (
+                                          <>
+                                            <Separator />
+                                            <div className="flex flex-col gap-1">
+                                              <p className="text-sm font-medium text-muted-foreground">
+                                                Linked Assets
+                                              </p>
+                                              <div className="flex flex-wrap gap-1.5">
+                                                {task.linkedAssets.map((a) => (
+                                                  <Badge key={a} variant="secondary" className="font-mono text-xs">
+                                                    {a}
+                                                  </Badge>
+                                                ))}
+                                              </div>
+                                            </div>
+                                          </>
+                                        )}
                                       </div>
                                     </ScrollArea>
                                   </SheetContent>
@@ -227,90 +264,56 @@ export default function RemediationPage() {
                           ))}
                         </TableBody>
                       </Table>
-                    </div>
-                  )}
-                </DataState>
-              </CardContent>
-            </Card>
-          </TabsContent>
+                    </CardContent>
+                  </Card>
+                </TabsContent>
 
-          <TabsContent value='pending'>
-            <Card>
-              <CardContent className='pt-4'>
-                <DataState isLoading={isLoading} error={error} isEmpty={filtered.filter(t => t.status === 'pending').length === 0}>
-                  {filtered.filter(t => t.status === 'pending').length > 0 && (
-                    <div className='space-y-2'>
-                      {filtered
-                        .filter(t => t.status === 'pending')
-                        .map(task => (
-                          <div key={task.id} className='flex items-center justify-between p-3 border rounded-lg'>
-                            <div>
-                              <p className='font-medium'>{task.title}</p>
-                              <p className='text-xs text-muted-foreground'>Due: {task.dueDate}</p>
-                            </div>
-                            <Badge className={task.priority === 'critical' ? 'bg-red-600' : 'bg-orange-600'}>
-                              {task.priority}
-                            </Badge>
-                          </div>
-                        ))}
-                    </div>
-                  )}
-                </DataState>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value='in-progress'>
-            <Card>
-              <CardContent className='pt-4'>
-                <DataState isLoading={isLoading} error={error} isEmpty={filtered.filter(t => t.status === 'in-progress').length === 0}>
-                  {filtered.filter(t => t.status === 'in-progress').length > 0 && (
-                    <div className='space-y-2'>
-                      {filtered
-                        .filter(t => t.status === 'in-progress')
-                        .map(task => (
-                          <div key={task.id} className='flex items-center justify-between p-3 border rounded-lg'>
-                            <div>
-                              <p className='font-medium'>{task.title}</p>
-                              <p className='text-xs text-muted-foreground'>Owner: {task.owner}</p>
-                            </div>
-                            <Badge variant='outline' className='bg-blue-500/10 text-blue-700'>
-                              In Progress
-                            </Badge>
-                          </div>
-                        ))}
-                    </div>
-                  )}
-                </DataState>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value='completed'>
-            <Card>
-              <CardContent className='pt-4'>
-                <DataState isLoading={isLoading} error={error} isEmpty={filtered.filter(t => t.status === 'completed').length === 0}>
-                  {filtered.filter(t => t.status === 'completed').length > 0 && (
-                    <div className='space-y-2'>
-                      {filtered
-                        .filter(t => t.status === 'completed')
-                        .map(task => (
-                          <div key={task.id} className='flex items-center justify-between p-3 border rounded-lg'>
-                            <div>
-                              <p className='font-medium'>{task.title}</p>
-                              <p className='text-xs text-muted-foreground'>{task.finding}</p>
-                            </div>
-                            <Badge className='bg-green-600'>Completed</Badge>
-                          </div>
-                        ))}
-                    </div>
-                  )}
-                </DataState>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
-      </div>
+                <TabsContent value="open">
+                  <Card>
+                    <CardContent className="pt-4">
+                      {renderList(filtered.filter(isOpen), (t) => `Due ${formatDate(t.slaDueAt)}`)}
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+                <TabsContent value="active">
+                  <Card>
+                    <CardContent className="pt-4">
+                      {renderList(filtered.filter(isActive), (t) => `Owner: ${t.owner ?? 'Unassigned'}`)}
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+                <TabsContent value="done">
+                  <Card>
+                    <CardContent className="pt-4">
+                      {renderList(filtered.filter(isDone), (t) => titleCase(t.category))}
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+              </Tabs>
+            </div>
+          )
+        }}
+      </DataState>
     </>
+  )
+}
+
+function Stat({ label, value, className }: { label: string; value: number; className?: string }) {
+  return (
+    <div className="flex flex-col gap-0.5">
+      <p className="text-sm font-medium text-muted-foreground">{label}</p>
+      <p className={`font-heading text-2xl font-semibold tabular-nums ${className ?? ''}`}>
+        {formatNumber(value)}
+      </p>
+    </div>
+  )
+}
+
+function Detail({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <p className="text-sm font-medium text-muted-foreground">{label}</p>
+      <p className="text-sm">{value}</p>
+    </div>
   )
 }

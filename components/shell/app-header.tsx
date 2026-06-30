@@ -56,7 +56,7 @@ export function AppHeader() {
       <SidebarTrigger />
       <Separator orientation="vertical" className="mr-1 h-5" />
 
-      <Select value={tenantId} onValueChange={setTenantId}>
+      <Select value={tenantId} onValueChange={(v) => setTenantId(v ?? "")}>
         <SelectTrigger size="sm" className="w-[180px]" aria-label="Select tenant">
           <SelectValue placeholder="Select tenant" />
         </SelectTrigger>
@@ -72,7 +72,7 @@ export function AppHeader() {
         </SelectContent>
       </Select>
 
-      <Select value={environment} onValueChange={setEnvironment}>
+      <Select value={environment} onValueChange={(v) => setEnvironment(v ?? "all")}>
         <SelectTrigger
           size="sm"
           className="hidden w-[130px] sm:flex"

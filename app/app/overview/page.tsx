@@ -4,170 +4,242 @@ import { useOverview } from '@/lib/api/client'
 import { PageHeader } from '@/components/shared/page-header'
 import { DataState } from '@/components/shared/data-state'
 import { KPICard } from '@/components/shared/kpi-card'
+import { RiskBadge, SeverityBadge } from '@/components/shared/status-badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Progress } from '@/components/ui/progress'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Chart, ChartContainer, ChartTooltip, ChartLegend } from '@/components/ui/chart'
-import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
-import { AlertTriangle, TrendingUp, CheckCircle2, Clock } from 'lucide-react'
-import { formatNumber, formatPercent } from '@/lib/format'
+import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart'
+import {
+  AreaChart,
+  Area,
+  PieChart,
+  Pie,
+  Cell,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+} from 'recharts'
+import { Boxes, Globe, ShieldAlert, Wrench } from 'lucide-react'
+import { formatNumber, relativeTime } from '@/lib/format'
 
-const overviewChartConfig = {
-  score: { label: 'Risk Score', color: '#ef4444' },
-  trend: { label: 'Trend', color: '#3b82f6' },
+const growthConfig = {
+  assets: { label: 'Total Assets', color: 'var(--chart-1)' },
+  pqReady: { label: 'PQ Ready', color: 'var(--chart-2)' },
+} satisfies ChartConfig
+
+const RISK_COLORS: Record<string, string> = {
+  critical: 'var(--chart-5)',
+  high: 'var(--chart-4)',
+  medium: 'var(--chart-3)',
+  low: 'var(--chart-2)',
 }
 
-const riskTrendData = [
-  { month: 'Jan', score: 68, trend: 72 },
-  { month: 'Feb', score: 65, trend: 71 },
-  { month: 'Mar', score: 62, trend: 68 },
-  { month: 'Apr', score: 58, trend: 64 },
-  { month: 'May', score: 61, trend: 65 },
-  { month: 'Jun', score: 59, trend: 63 },
-]
-
-const tenantRiskData = [
-  { name: 'Critical', value: 12 },
-  { name: 'High', value: 28 },
-  { name: 'Medium', value: 45 },
-  { name: 'Low', value: 65 },
-]
-
-const tenantRiskColors = ['#ef4444', '#f97316', '#eab308', '#84cc16']
-
 export default function OverviewPage() {
-  const { data, isLoading, error } = useOverview()
+  const { data, isLoading, error, refresh } = useOverview()
 
   return (
     <>
       <PageHeader
-        title='Security Intelligence Hub'
-        description='Enterprise-wide visibility into risk, compliance, and threat landscape'
+        title="Security Intelligence Hub"
+        description="Enterprise-wide visibility into cryptographic risk, compliance, and PQC readiness"
       />
 
-      <div className='space-y-4'>
-        {/* Alert Banner */}
-        {data?.alertCount && data.alertCount > 0 && (
-          <Alert className='border-destructive bg-destructive/5'>
-            <AlertTriangle className='size-4' />
-            <AlertDescription>
-              {data.alertCount} critical findings require immediate attention
-            </AlertDescription>
-          </Alert>
-        )}
+      <DataState isLoading={isLoading} error={error} data={data} onRetry={refresh}>
+        {(overview) => {
+          const { kpis } = overview
+          return (
+            <div className="flex flex-col gap-4">
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                <KPICard
+                  title="Crypto Assets"
+                  value={formatNumber(kpis.totalCryptoAssets)}
+                  icon={Boxes}
+                  status="info"
+                />
+                <KPICard
+                  title="Internet Facing"
+                  value={formatNumber(kpis.internetFacingAssets)}
+                  icon={Globe}
+                  status="warning"
+                />
+                <KPICard
+                  title="Active Alerts"
+                  value={formatNumber(kpis.activeAlerts)}
+                  icon={ShieldAlert}
+                  status="critical"
+                />
+                <KPICard
+                  title="Open Remediations"
+                  value={formatNumber(kpis.openRemediationTasks)}
+                  icon={Wrench}
+                  status="default"
+                />
+              </div>
 
-        {/* KPI Grid */}
-        <DataState isLoading={isLoading} error={error} isEmpty={!data}>
-          {data && (
-            <div className='grid gap-4 md:grid-cols-2 lg:grid-cols-4'>
-              <KPICard
-                title='Overall Risk'
-                value={formatNumber(data.overallRisk)}
-                unit='/100'
-                icon={TrendingUp}
-                trend={{ direction: 'down', value: 3 }}
-                status='critical'
-              />
-              <KPICard
-                title='Compliant'
-                value={formatPercent(data.complianceRate)}
-                icon={CheckCircle2}
-                status='success'
-              />
-              <KPICard
-                title='Findings'
-                value={formatNumber(data.findingCount)}
-                trend={{ direction: 'down', value: 5 }}
-                status='warning'
-              />
-              <KPICard
-                title='Time to Fix'
-                value={`${data.avgTimeToRemedy}d`}
-                icon={Clock}
-                status='info'
-              />
-            </div>
-          )}
-        </DataState>
+              <div className="grid gap-4 lg:grid-cols-3">
+                <Card className="lg:col-span-2">
+                  <CardHeader>
+                    <CardTitle>Asset Growth & PQC Readiness</CardTitle>
+                    <CardDescription>Discovered assets versus post-quantum ready assets</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <ChartContainer config={growthConfig} className="h-[280px] w-full">
+                      <AreaChart data={overview.assetGrowth} margin={{ left: 4, right: 12, top: 8 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                        <XAxis dataKey="date" tickLine={false} axisLine={false} tickMargin={8} />
+                        <YAxis tickLine={false} axisLine={false} width={36} />
+                        <ChartTooltip content={<ChartTooltipContent />} />
+                        <Area
+                          type="monotone"
+                          dataKey="assets"
+                          stroke="var(--color-assets)"
+                          fill="var(--color-assets)"
+                          fillOpacity={0.15}
+                          strokeWidth={2}
+                        />
+                        <Area
+                          type="monotone"
+                          dataKey="pqReady"
+                          stroke="var(--color-pqReady)"
+                          fill="var(--color-pqReady)"
+                          fillOpacity={0.15}
+                          strokeWidth={2}
+                        />
+                      </AreaChart>
+                    </ChartContainer>
+                  </CardContent>
+                </Card>
 
-        {/* Charts Row */}
-        <div className='grid gap-4 lg:grid-cols-2'>
-          {/* Risk Trend */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Risk Trend</CardTitle>
-              <CardDescription>6-month trajectory</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width='100%' height={280}>
-                <LineChart data={riskTrendData}>
-                  <CartesianGrid strokeDasharray='3 3' />
-                  <XAxis dataKey='month' />
-                  <YAxis domain={[0, 100]} />
-                  <Tooltip />
-                  <Legend />
-                  <Line type='monotone' dataKey='score' stroke='#ef4444' strokeWidth={2} dot={false} />
-                  <Line type='monotone' dataKey='trend' stroke='#3b82f6' strokeWidth={2} dot={false} />
-                </LineChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-
-          {/* Tenant Risk Distribution */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Tenant Risk Distribution</CardTitle>
-              <CardDescription>{data?.tenantCount || 0} tenants tracked</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width='100%' height={280}>
-                <PieChart>
-                  <Pie data={tenantRiskData} cx='50%' cy='50%' labelLine={false} label={({ name, value }) => `${name} (${value})`} outerRadius={80}>
-                    {tenantRiskData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={tenantRiskColors[index]} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Recent Activity */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Recent Activity</CardTitle>
-            <CardDescription>Latest events and updates</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ScrollArea className='h-80 pr-4'>
-              <DataState isLoading={isLoading} error={error} isEmpty={!data?.recentActivity?.length}>
-                {data?.recentActivity && data.recentActivity.length > 0 ? (
-                  <div className='space-y-3'>
-                    {data.recentActivity.map((activity, idx) => (
-                      <div key={idx} className='flex items-start gap-3 border-b pb-3 last:border-0'>
-                        <div className='mt-1 size-2 flex-shrink-0 rounded-full bg-primary' />
-                        <div className='flex-1 min-w-0'>
-                          <p className='font-medium text-sm truncate'>{activity.title}</p>
-                          <p className='text-xs text-muted-foreground'>{activity.timestamp}</p>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Risk Distribution</CardTitle>
+                    <CardDescription>Assets by risk band</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <ChartContainer config={{}} className="mx-auto aspect-square max-h-[240px]">
+                      <PieChart>
+                        <ChartTooltip content={<ChartTooltipContent />} />
+                        <Pie
+                          data={overview.riskDistribution}
+                          dataKey="value"
+                          nameKey="name"
+                          innerRadius={50}
+                          outerRadius={80}
+                          paddingAngle={2}
+                        >
+                          {overview.riskDistribution.map((entry) => (
+                            <Cell
+                              key={entry.key}
+                              fill={RISK_COLORS[entry.key] ?? 'var(--chart-1)'}
+                            />
+                          ))}
+                        </Pie>
+                      </PieChart>
+                    </ChartContainer>
+                    <div className="mt-2 flex flex-wrap justify-center gap-3">
+                      {overview.riskDistribution.map((entry) => (
+                        <div key={entry.key} className="flex items-center gap-1.5">
+                          <span
+                            className="size-2.5 rounded-full"
+                            style={{ background: RISK_COLORS[entry.key] ?? 'var(--chart-1)' }}
+                          />
+                          <span className="text-xs text-muted-foreground">
+                            {entry.name} ({entry.value})
+                          </span>
                         </div>
-                        <Badge variant='outline' className='flex-shrink-0 text-xs'>
-                          {activity.type}
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <div className="grid gap-4 lg:grid-cols-2">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Top Risky Assets</CardTitle>
+                    <CardDescription>Highest scored assets needing attention</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <ScrollArea className="h-72 pr-4">
+                      <div className="flex flex-col gap-2">
+                        {overview.topRiskyAssets.map((asset) => (
+                          <div
+                            key={asset.assetId}
+                            className="flex items-center justify-between rounded-lg border border-border p-3"
+                          >
+                            <div className="flex min-w-0 flex-col">
+                              <span className="truncate font-medium">{asset.assetName}</span>
+                              <span className="truncate text-xs text-muted-foreground">{asset.rationale}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <RiskBadge band={asset.band} />
+                              <Badge variant="secondary" className="tabular-nums">
+                                {asset.totalScore}
+                              </Badge>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Recent CT Events</CardTitle>
+                    <CardDescription>Newly observed certificates in transparency logs</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <ScrollArea className="h-72 pr-4">
+                      <div className="flex flex-col gap-2">
+                        {overview.recentCtEvents.map((event) => (
+                          <div
+                            key={event.id}
+                            className="flex items-center justify-between rounded-lg border border-border p-3"
+                          >
+                            <div className="flex min-w-0 flex-col">
+                              <span className="truncate font-medium">{event.domain}</span>
+                              <span className="truncate text-xs text-muted-foreground">
+                                {event.issuer} · {relativeTime(event.timestamp)}
+                              </span>
+                            </div>
+                            <SeverityBadge severity={event.severity} />
+                          </div>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Recent Discoveries</CardTitle>
+                  <CardDescription>Latest assets found across discovery sources</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex flex-col gap-2">
+                    {overview.recentDiscoveries.map((item) => (
+                      <div
+                        key={item.id}
+                        className="flex items-center justify-between border-b border-border pb-2 last:border-0 last:pb-0"
+                      >
+                        <div className="flex min-w-0 flex-col">
+                          <span className="truncate text-sm font-medium">{item.name}</span>
+                          <span className="text-xs text-muted-foreground">{relativeTime(item.at)}</span>
+                        </div>
+                        <Badge variant="outline" className="text-xs">
+                          {item.source}
                         </Badge>
                       </div>
                     ))}
                   </div>
-                ) : (
-                  <p className='text-sm text-muted-foreground'>No recent activity</p>
-                )}
-              </DataState>
-            </ScrollArea>
-          </CardContent>
-        </Card>
-      </div>
+                </CardContent>
+              </Card>
+            </div>
+          )
+        }}
+      </DataState>
     </>
   )
 }

@@ -3,247 +3,294 @@
 import { useMigration } from '@/lib/api/client'
 import { PageHeader } from '@/components/shared/page-header'
 import { DataState } from '@/components/shared/data-state'
-import { StatusBadge } from '@/components/shared/status-badge'
+import { Pill } from '@/components/shared/status-badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
-import { Calendar, AlertTriangle, CheckCircle2 } from 'lucide-react'
-import { formatNumber, formatPercent } from '@/lib/format'
+import { TriangleAlert, ArrowRight } from 'lucide-react'
+import { formatNumber, formatDate, titleCase } from '@/lib/format'
+import type { MigrationPlan, MigrationStage } from '@/lib/types'
+
+type Tone = 'critical' | 'warning' | 'success' | 'info' | 'neutral' | 'accent'
+
+const STAGE_ORDER: MigrationStage[] = [
+  'current_state',
+  'discovery_complete',
+  'hybrid_pilot',
+  'pq_ready_validation',
+  'production_rollout',
+  'legacy_deprecation',
+]
+
+const criticalityTone: Record<MigrationPlan['criticality'], Tone> = {
+  'tier-1': 'critical',
+  'tier-2': 'warning',
+  'tier-3': 'neutral',
+}
+
+function StageBadge({ stage }: { stage: MigrationStage }) {
+  const idx = STAGE_ORDER.indexOf(stage)
+  const tone: Tone = stage === 'legacy_deprecation' ? 'success' : idx >= 3 ? 'info' : 'neutral'
+  return <Pill tone={tone}>{titleCase(stage)}</Pill>
+}
 
 export default function MigrationPage() {
-  const { data, isLoading, error } = useMigration()
-
-  const planStats = {
-    total: data?.length || 0,
-    active: data?.filter(p => p.status === 'active').length || 0,
-    completed: data?.filter(p => p.status === 'completed').length || 0,
-    onTrack: data?.filter(p => !p.isDelayed).length || 0,
-  }
+  const { data, isLoading, error, refresh } = useMigration()
 
   return (
     <>
       <PageHeader
-        title='Migration Planner'
-        description='Plan and track cloud infrastructure migrations'
+        title="PQC Migration Planner"
+        description="Plan and track the migration from classical to post-quantum cryptography"
       />
 
-      <div className='space-y-4'>
-        {/* Plan Stats */}
-        <div className='grid gap-4 md:grid-cols-2 lg:grid-cols-4'>
-          <Card>
-            <CardHeader className='pb-2'>
-              <CardTitle className='text-sm font-medium'>Total Plans</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className='text-2xl font-bold'>{formatNumber(planStats.total)}</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className='pb-2'>
-              <CardTitle className='text-sm font-medium'>Active</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className='text-2xl font-bold text-blue-600'>{formatNumber(planStats.active)}</p>
-              <p className='text-xs text-muted-foreground mt-1'>In progress</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className='pb-2'>
-              <CardTitle className='text-sm font-medium'>Completed</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className='text-2xl font-bold text-green-600'>{formatNumber(planStats.completed)}</p>
-              <p className='text-xs text-muted-foreground mt-1'>Successfully migrated</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className='pb-2'>
-              <CardTitle className='text-sm font-medium'>On Track</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className='text-2xl font-bold text-green-600'>{formatNumber(planStats.onTrack)}</p>
-              <p className='text-xs text-muted-foreground mt-1'>Meeting timeline</p>
-            </CardContent>
-          </Card>
-        </div>
+      <DataState
+        isLoading={isLoading}
+        error={error}
+        data={data}
+        onRetry={refresh}
+        isEmpty={(d) => d.length === 0}
+      >
+        {(plans) => {
+          const inProgress = plans.filter(
+            (p) => p.stage !== 'current_state' && p.stage !== 'legacy_deprecation'
+          )
+          const blocked = plans.filter((p) => p.blockers.length > 0)
+          const completed = plans.filter((p) => p.stage === 'legacy_deprecation' || p.progress >= 100)
 
-        {/* Migration Plans */}
-        <Tabs defaultValue='active' className='w-full'>
-          <TabsList>
-            <TabsTrigger value='active'>Active ({planStats.active})</TabsTrigger>
-            <TabsTrigger value='delayed'>Delayed ({data?.filter(p => p.isDelayed).length || 0})</TabsTrigger>
-            <TabsTrigger value='completed'>Completed ({planStats.completed})</TabsTrigger>
-          </TabsList>
+          const stats = {
+            total: plans.length,
+            inProgress: inProgress.length,
+            blocked: blocked.length,
+            completed: completed.length,
+          }
 
-          <TabsContent value='active'>
-            <Card>
-              <CardHeader>
-                <CardTitle>Active Migration Plans</CardTitle>
-                <CardDescription>Ongoing migrations and their progress</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <DataState isLoading={isLoading} error={error} isEmpty={!data?.filter(p => p.status === 'active').length}>
-                  {data?.filter(p => p.status === 'active').length ? (
-                    <div className='space-y-4'>
-                      {data
-                        .filter(p => p.status === 'active')
-                        .map(plan => (
-                          <Sheet key={plan.id}>
-                            <SheetTrigger asChild>
-                              <div className='cursor-pointer p-4 border rounded-lg hover:bg-accent transition-colors'>
-                                <div className='flex items-start justify-between mb-3'>
-                                  <div>
-                                    <p className='font-semibold'>{plan.name}</p>
-                                    <p className='text-sm text-muted-foreground'>{plan.sourceProvider} → {plan.targetProvider}</p>
-                                  </div>
-                                  {plan.isDelayed && (
-                                    <Badge className='bg-destructive flex items-center gap-1'>
-                                      <AlertTriangle className='size-3' />
-                                      Delayed
-                                    </Badge>
-                                  )}
-                                </div>
-                                <div className='flex items-center gap-3'>
-                                  <div className='flex-1'>
-                                    <div className='flex justify-between text-xs mb-1'>
-                                      <span className='font-medium'>Progress</span>
-                                      <span className='text-muted-foreground'>{plan.progressPercent}%</span>
-                                    </div>
-                                    <Progress value={plan.progressPercent} className='h-2' />
-                                  </div>
-                                  <span className='text-xs font-medium whitespace-nowrap text-muted-foreground'>
-                                    {plan.completedWaves}/{plan.totalWaves} waves
-                                  </span>
-                                </div>
-                              </div>
-                            </SheetTrigger>
-                            <SheetContent className='w-[600px]'>
-                              <SheetHeader>
-                                <SheetTitle>{plan.name}</SheetTitle>
-                              </SheetHeader>
-                              <ScrollArea className='h-[calc(100vh-120px)] mt-4'>
-                                <div className='space-y-4 pr-4'>
-                                  <div>
-                                    <p className='text-sm font-medium text-muted-foreground'>Status</p>
-                                    <StatusBadge status={plan.status} />
-                                  </div>
-                                  <Separator />
-                                  <div>
-                                    <p className='text-sm font-medium text-muted-foreground'>Source → Target</p>
-                                    <p className='text-sm'>{plan.sourceProvider} → {plan.targetProvider}</p>
-                                  </div>
-                                  <Separator />
-                                  <div>
-                                    <p className='text-sm font-medium text-muted-foreground'>Progress</p>
-                                    <p className='text-2xl font-bold mb-2'>{plan.progressPercent}%</p>
-                                    <Progress value={plan.progressPercent} className='h-2' />
-                                  </div>
-                                  <Separator />
-                                  <div>
-                                    <p className='text-sm font-medium text-muted-foreground'>Waves</p>
-                                    <p className='text-sm'>{plan.completedWaves} of {plan.totalWaves} completed</p>
-                                  </div>
-                                  <Separator />
-                                  <div>
-                                    <p className='text-sm font-medium text-muted-foreground'>Start Date</p>
-                                    <p className='text-sm'>{plan.startDate}</p>
-                                  </div>
-                                  <Separator />
-                                  <div>
-                                    <p className='text-sm font-medium text-muted-foreground'>Target Date</p>
-                                    <p className='text-sm'>{plan.targetDate}</p>
-                                  </div>
-                                  <Separator />
-                                  <div>
-                                    <p className='text-sm font-medium text-muted-foreground'>Assets Migrated</p>
-                                    <p className='text-lg font-semibold'>{formatNumber(plan.assetsMigrated)}/{formatNumber(plan.totalAssets)}</p>
-                                  </div>
-                                </div>
-                              </ScrollArea>
-                            </SheetContent>
-                          </Sheet>
-                        ))}
+          const renderCard = (plan: MigrationPlan) => (
+            <Sheet key={plan.id}>
+              <SheetTrigger
+                render={
+                  <div className="cursor-pointer rounded-lg border border-border p-4 transition-colors hover:bg-accent">
+                    <div className="mb-3 flex items-start justify-between gap-2">
+                      <div className="flex min-w-0 flex-col">
+                        <p className="truncate font-semibold">{plan.assetName}</p>
+                        <p className="truncate text-sm text-muted-foreground">{plan.businessService}</p>
+                      </div>
+                      {plan.blockers.length > 0 && (
+                        <Badge variant="destructive" className="flex shrink-0 items-center gap-1">
+                          <TriangleAlert className="size-3" />
+                          {plan.blockers.length} blocker{plan.blockers.length > 1 ? 's' : ''}
+                        </Badge>
+                      )}
                     </div>
-                  ) : (
-                    <p className='text-sm text-muted-foreground text-center py-8'>No active migration plans</p>
-                  )}
-                </DataState>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value='delayed'>
-            <Card>
-              <CardHeader>
-                <CardTitle>Delayed Plans</CardTitle>
-                <CardDescription>Migrations behind schedule</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <DataState isLoading={isLoading} error={error} isEmpty={!data?.filter(p => p.isDelayed).length}>
-                  {data?.filter(p => p.isDelayed).length ? (
-                    <div className='space-y-2'>
-                      {data
-                        .filter(p => p.isDelayed)
-                        .map(plan => (
-                          <div key={plan.id} className='flex items-center justify-between p-3 border border-destructive/50 rounded-lg bg-destructive/5'>
-                            <div>
-                              <p className='font-medium'>{plan.name}</p>
-                              <p className='text-xs text-muted-foreground'>Target: {plan.targetDate}</p>
-                            </div>
-                            <Badge className='bg-destructive flex items-center gap-1'>
-                              <AlertTriangle className='size-3' />
-                              {formatPercent((plan.progressPercent / 100) * 100)}% complete
-                            </Badge>
+                    <div className="mb-3 flex items-center gap-2 text-xs">
+                      <span className="font-mono">{plan.currentAlgorithm}</span>
+                      <ArrowRight className="size-3 text-muted-foreground" />
+                      <span className="font-mono text-primary">{plan.targetAlgorithm}</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1">
+                        <div className="mb-1 flex justify-between text-xs">
+                          <span className="font-medium">Progress</span>
+                          <span className="tabular-nums text-muted-foreground">{plan.progress}%</span>
+                        </div>
+                        <Progress value={plan.progress} className="h-2" />
+                      </div>
+                      <StageBadge stage={plan.stage} />
+                    </div>
+                  </div>
+                }
+              />
+              <SheetContent className="w-full sm:max-w-lg">
+                <SheetHeader>
+                  <SheetTitle>{plan.assetName}</SheetTitle>
+                </SheetHeader>
+                <ScrollArea className="mt-4 h-[calc(100vh-120px)]">
+                  <div className="flex flex-col gap-4 pr-4">
+                    <div className="flex flex-col gap-1">
+                      <p className="text-sm font-medium text-muted-foreground">Stage</p>
+                      <StageBadge stage={plan.stage} />
+                    </div>
+                    <Separator />
+                    <div className="flex flex-col gap-1">
+                      <p className="text-sm font-medium text-muted-foreground">Criticality</p>
+                      <Pill tone={criticalityTone[plan.criticality]}>{plan.criticality.toUpperCase()}</Pill>
+                    </div>
+                    <Separator />
+                    <Detail label="Business Service" value={plan.businessService} />
+                    <Separator />
+                    <div className="flex flex-col gap-1">
+                      <p className="text-sm font-medium text-muted-foreground">Algorithm Migration</p>
+                      <div className="flex items-center gap-2 text-sm">
+                        <span className="font-mono">{plan.currentAlgorithm}</span>
+                        <ArrowRight className="size-3.5 text-muted-foreground" />
+                        <span className="font-mono text-primary">{plan.targetAlgorithm}</span>
+                      </div>
+                    </div>
+                    <Separator />
+                    <div className="flex flex-col gap-1.5">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-medium text-muted-foreground">Progress</p>
+                        <span className="tabular-nums text-sm">{plan.progress}%</span>
+                      </div>
+                      <Progress value={plan.progress} className="h-2" />
+                    </div>
+                    <Separator />
+                    <Detail label="Owner" value={plan.owner} />
+                    <Separator />
+                    <Detail label="Target Date" value={formatDate(plan.targetDate)} />
+                    {plan.blockers.length > 0 && (
+                      <>
+                        <Separator />
+                        <div className="flex flex-col gap-1">
+                          <p className="text-sm font-medium text-muted-foreground">Blockers</p>
+                          <ul className="flex flex-col gap-1">
+                            {plan.blockers.map((b) => (
+                              <li key={b} className="flex items-center gap-2 text-sm">
+                                <TriangleAlert className="size-3.5 text-destructive" />
+                                {b}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      </>
+                    )}
+                    {plan.dependencies.length > 0 && (
+                      <>
+                        <Separator />
+                        <div className="flex flex-col gap-1">
+                          <p className="text-sm font-medium text-muted-foreground">Dependencies</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {plan.dependencies.map((d) => (
+                              <Badge key={d} variant="secondary" className="text-xs">
+                                {d}
+                              </Badge>
+                            ))}
                           </div>
-                        ))}
-                    </div>
-                  ) : (
-                    <p className='text-sm text-muted-foreground text-center py-8'>All plans on track</p>
-                  )}
-                </DataState>
-              </CardContent>
-            </Card>
-          </TabsContent>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </ScrollArea>
+              </SheetContent>
+            </Sheet>
+          )
 
-          <TabsContent value='completed'>
-            <Card>
-              <CardHeader>
-                <CardTitle>Completed Migrations</CardTitle>
-                <CardDescription>Successfully completed migration plans</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <DataState isLoading={isLoading} error={error} isEmpty={!planStats.completed}>
-                  {planStats.completed > 0 ? (
-                    <div className='space-y-2'>
-                      {data
-                        ?.filter(p => p.status === 'completed')
-                        .map(plan => (
-                          <div key={plan.id} className='flex items-center justify-between p-3 border rounded-lg bg-green-500/5'>
-                            <div>
-                              <p className='font-medium flex items-center gap-2'>
-                                <CheckCircle2 className='size-4 text-green-600' />
-                                {plan.name}
-                              </p>
-                              <p className='text-xs text-muted-foreground'>Completed: {plan.targetDate}</p>
-                            </div>
-                            <Badge className='bg-green-600'>{formatNumber(plan.totalAssets)} assets</Badge>
-                          </div>
-                        ))}
-                    </div>
-                  ) : (
-                    <p className='text-sm text-muted-foreground text-center py-8'>No completed migrations</p>
-                  )}
-                </DataState>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
-      </div>
+          return (
+            <div className="flex flex-col gap-4">
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                <StatCard label="Total Plans" value={stats.total} />
+                <StatCard label="In Progress" value={stats.inProgress} hint="Active migrations" tone="text-info" />
+                <StatCard label="Blocked" value={stats.blocked} hint="Need attention" tone="text-destructive" />
+                <StatCard label="Completed" value={stats.completed} hint="PQ ready" tone="text-emerald-500" />
+              </div>
+
+              <Tabs defaultValue="in-progress" className="w-full">
+                <TabsList>
+                  <TabsTrigger value="in-progress">In Progress ({inProgress.length})</TabsTrigger>
+                  <TabsTrigger value="blocked">Blocked ({blocked.length})</TabsTrigger>
+                  <TabsTrigger value="completed">Completed ({completed.length})</TabsTrigger>
+                  <TabsTrigger value="all">All ({plans.length})</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="in-progress">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Active Migrations</CardTitle>
+                      <CardDescription>Plans currently moving toward post-quantum readiness</CardDescription>
+                    </CardHeader>
+                    <CardContent className="flex flex-col gap-4">
+                      {inProgress.length ? (
+                        inProgress.map(renderCard)
+                      ) : (
+                        <p className="py-8 text-center text-sm text-muted-foreground">No active migrations</p>
+                      )}
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+
+                <TabsContent value="blocked">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Blocked Migrations</CardTitle>
+                      <CardDescription>Plans with unresolved blockers</CardDescription>
+                    </CardHeader>
+                    <CardContent className="flex flex-col gap-4">
+                      {blocked.length ? (
+                        blocked.map(renderCard)
+                      ) : (
+                        <p className="py-8 text-center text-sm text-muted-foreground">No blocked migrations</p>
+                      )}
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+
+                <TabsContent value="completed">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Completed Migrations</CardTitle>
+                      <CardDescription>Assets that reached post-quantum readiness</CardDescription>
+                    </CardHeader>
+                    <CardContent className="flex flex-col gap-4">
+                      {completed.length ? (
+                        completed.map(renderCard)
+                      ) : (
+                        <p className="py-8 text-center text-sm text-muted-foreground">No completed migrations</p>
+                      )}
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+
+                <TabsContent value="all">
+                  <Card>
+                    <CardContent className="flex flex-col gap-4 pt-4">
+                      {plans.map(renderCard)}
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+              </Tabs>
+            </div>
+          )
+        }}
+      </DataState>
     </>
+  )
+}
+
+function StatCard({
+  label,
+  value,
+  hint,
+  tone,
+}: {
+  label: string
+  value: number
+  hint?: string
+  tone?: string
+}) {
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm font-medium">{label}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <p className={`font-heading text-2xl font-semibold tabular-nums ${tone ?? ''}`}>
+          {formatNumber(value)}
+        </p>
+        {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
+      </CardContent>
+    </Card>
+  )
+}
+
+function Detail({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <p className="text-sm font-medium text-muted-foreground">{label}</p>
+      <p className="text-sm">{value}</p>
+    </div>
   )
 }

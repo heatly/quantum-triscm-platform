@@ -4,20 +4,16 @@ import { useRiskScores } from '@/lib/api/client'
 import { PageHeader } from '@/components/shared/page-header'
 import { DataState } from '@/components/shared/data-state'
 import { KPICard } from '@/components/shared/kpi-card'
+import { RiskBadge } from '@/components/shared/status-badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts'
-import { AlertTriangle, TrendingUp, TrendingDown } from 'lucide-react'
-import { formatNumber, formatPercent } from '@/lib/format'
-
-const riskDistribution = [
-  { range: 'Critical (90-100)', count: 8 },
-  { range: 'High (70-89)', count: 24 },
-  { range: 'Medium (50-69)', count: 45 },
-  { range: 'Low (0-49)', count: 78 },
-]
+import { Progress } from '@/components/ui/progress'
+import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart'
+import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Cell } from 'recharts'
+import { ShieldAlert, TrendingUp, TrendingDown, Activity } from 'lucide-react'
+import { formatNumber, titleCase } from '@/lib/format'
+import type { RiskScore } from '@/lib/types'
 
 const riskTrend = [
   { month: 'Jan', score: 72 },
@@ -29,185 +25,184 @@ const riskTrend = [
   { month: 'Jul', score: 61 },
 ]
 
+const trendConfig = {
+  score: { label: 'Avg Risk', color: 'var(--chart-1)' },
+} satisfies ChartConfig
+
+const distConfig = {
+  count: { label: 'Assets', color: 'var(--chart-1)' },
+} satisfies ChartConfig
+
+const BAND_COLORS: Record<string, string> = {
+  critical: 'var(--chart-5)',
+  high: 'var(--chart-4)',
+  medium: 'var(--chart-3)',
+  low: 'var(--chart-2)',
+}
+
 export default function RiskPage() {
-  const { data, isLoading, error } = useRiskScores()
+  const { data, isLoading, error, refresh } = useRiskScores()
 
   return (
     <>
       <PageHeader
-        title='Risk Management'
-        description='Monitor security risk scores and trends across your infrastructure'
+        title="Risk Management"
+        description="Monitor cryptographic risk scores and trends across your infrastructure"
       />
 
-      <div className='space-y-4'>
-        {/* KPI Cards */}
-        <DataState isLoading={isLoading} error={error} isEmpty={!data}>
-          {data && (
-            <div className='grid gap-4 md:grid-cols-2 lg:grid-cols-4'>
-              <KPICard
-                title='Overall Risk'
-                value={formatNumber(data.overallScore)}
-                unit='/100'
-                icon={AlertTriangle}
-                status='critical'
-              />
-              <KPICard
-                title='High Risk Assets'
-                value={formatNumber(data.highRiskCount)}
-                trend={{ direction: 'down', value: 3 }}
-                status='warning'
-              />
-              <KPICard
-                title='Avg Risk Score'
-                value={formatNumber(data.avgScore)}
-                unit='/100'
-                icon={TrendingDown}
-                status='info'
-              />
-              <KPICard
-                title='Assets Improving'
-                value={formatPercent(data.improvingPercent)}
-                icon={TrendingUp}
-                status='success'
-              />
+      <DataState
+        isLoading={isLoading}
+        error={error}
+        data={data}
+        onRetry={refresh}
+        isEmpty={(d) => d.length === 0}
+      >
+        {(scores) => {
+          const sorted = [...scores].sort((a, b) => b.totalScore - a.totalScore)
+          const avg = scores.length
+            ? Math.round(scores.reduce((sum, s) => sum + s.totalScore, 0) / scores.length)
+            : 0
+          const highRisk = scores.filter((s) => s.band === 'critical' || s.band === 'high').length
+          const exposed = scores.filter((s) => s.internetExposed).length
+
+          const bands: Array<RiskScore['band']> = ['critical', 'high', 'medium', 'low']
+          const distribution = bands.map((band) => ({
+            range: titleCase(band),
+            band,
+            count: scores.filter((s) => s.band === band).length,
+          }))
+
+          // Aggregate dimension contributions across all assets
+          const dimMap = new Map<string, { label: string; total: number; count: number }>()
+          for (const s of scores) {
+            for (const d of s.dimensions) {
+              const entry = dimMap.get(d.key) ?? { label: d.label, total: 0, count: 0 }
+              entry.total += d.score
+              entry.count += 1
+              dimMap.set(d.key, entry)
+            }
+          }
+          const topFactors = Array.from(dimMap.values())
+            .map((e) => ({ label: e.label, avg: Math.round(e.total / Math.max(e.count, 1)) }))
+            .sort((a, b) => b.avg - a.avg)
+
+          return (
+            <div className="flex flex-col gap-4">
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                <KPICard title="Average Risk" value={avg} unit="/100" icon={ShieldAlert} status="critical" />
+                <KPICard title="High Risk Assets" value={formatNumber(highRisk)} icon={TrendingUp} status="warning" />
+                <KPICard title="Internet Exposed" value={formatNumber(exposed)} icon={Activity} status="info" />
+                <KPICard title="Scored Assets" value={formatNumber(scores.length)} icon={TrendingDown} status="default" />
+              </div>
+
+              <div className="grid gap-4 lg:grid-cols-2">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Risk Distribution</CardTitle>
+                    <CardDescription>Assets by risk band</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <ChartContainer config={distConfig} className="h-[300px] w-full">
+                      <BarChart data={distribution} margin={{ left: 4, right: 12, top: 8 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                        <XAxis dataKey="range" tickLine={false} axisLine={false} tickMargin={8} />
+                        <YAxis tickLine={false} axisLine={false} width={32} />
+                        <ChartTooltip content={<ChartTooltipContent />} />
+                        <Bar dataKey="count" radius={4}>
+                          {distribution.map((entry) => (
+                            <Cell key={entry.band} fill={BAND_COLORS[entry.band]} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ChartContainer>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Risk Trend</CardTitle>
+                    <CardDescription>7-month trajectory</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <ChartContainer config={trendConfig} className="h-[300px] w-full">
+                      <LineChart data={riskTrend} margin={{ left: 4, right: 12, top: 8 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                        <XAxis dataKey="month" tickLine={false} axisLine={false} tickMargin={8} />
+                        <YAxis domain={[0, 100]} tickLine={false} axisLine={false} width={32} />
+                        <ChartTooltip content={<ChartTooltipContent />} />
+                        <Line type="monotone" dataKey="score" stroke="var(--color-score)" strokeWidth={2} dot={false} />
+                      </LineChart>
+                    </ChartContainer>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Top Risk Factors</CardTitle>
+                  <CardDescription>Average contribution by scoring dimension</CardDescription>
+                </CardHeader>
+                <CardContent className="flex flex-col gap-3">
+                  {topFactors.map((factor) => (
+                    <div key={factor.label} className="flex flex-col gap-1.5">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-medium">{factor.label}</p>
+                        <span className="text-xs font-semibold tabular-nums">{factor.avg}/100</span>
+                      </div>
+                      <Progress value={factor.avg} className="h-2" />
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Highest Risk Assets</CardTitle>
+                  <CardDescription>Assets requiring immediate attention</CardDescription>
+                </CardHeader>
+                <CardContent className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Asset</TableHead>
+                        <TableHead>Type</TableHead>
+                        <TableHead>Environment</TableHead>
+                        <TableHead>Band</TableHead>
+                        <TableHead>Score</TableHead>
+                        <TableHead>Rationale</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {sorted.slice(0, 10).map((asset) => (
+                        <TableRow key={asset.assetId}>
+                          <TableCell className="font-medium">{asset.assetName}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline">{titleCase(asset.assetType)}</Badge>
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {titleCase(asset.environment)}
+                          </TableCell>
+                          <TableCell>
+                            <RiskBadge band={asset.band} />
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="secondary" className="tabular-nums">
+                              {asset.totalScore}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="max-w-xs truncate text-sm text-muted-foreground">
+                            {asset.rationale}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
             </div>
-          )}
-        </DataState>
-
-        {/* Charts */}
-        <div className='grid gap-4 lg:grid-cols-2'>
-          {/* Risk Distribution */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Risk Distribution</CardTitle>
-              <CardDescription>Assets by risk level</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width='100%' height={300}>
-                <BarChart data={riskDistribution}>
-                  <CartesianGrid strokeDasharray='3 3' />
-                  <XAxis dataKey='range' angle={-45} textAnchor='end' height={100} interval={0} />
-                  <YAxis />
-                  <Tooltip />
-                  <Bar dataKey='count' fill='#3b82f6'>
-                    {riskDistribution.map((entry, index) => {
-                      const colors = ['#ef4444', '#f97316', '#eab308', '#84cc16']
-                      return <Cell key={`cell-${index}`} fill={colors[index]} />
-                    })}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-
-          {/* Risk Trend */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Risk Trend</CardTitle>
-              <CardDescription>7-month trajectory</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width='100%' height={300}>
-                <LineChart data={riskTrend}>
-                  <CartesianGrid strokeDasharray='3 3' />
-                  <XAxis dataKey='month' />
-                  <YAxis domain={[0, 100]} />
-                  <Tooltip />
-                  <Line type='monotone' dataKey='score' stroke='#3b82f6' strokeWidth={2} dot={{ fill: '#3b82f6', r: 4 }} />
-                </LineChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Risk Factors */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Top Risk Factors</CardTitle>
-            <CardDescription>Primary contributors to overall risk score</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <DataState isLoading={isLoading} error={error} isEmpty={!data?.topFactors?.length}>
-              {data?.topFactors && data.topFactors.length > 0 ? (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Risk Factor</TableHead>
-                      <TableHead>Severity</TableHead>
-                      <TableHead>Count</TableHead>
-                      <TableHead>Impact Score</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {data.topFactors.map((factor, idx) => (
-                      <TableRow key={idx}>
-                        <TableCell className='font-medium'>{factor.name}</TableCell>
-                        <TableCell>
-                          <Badge
-                            className={
-                              factor.severity === 'critical'
-                                ? 'bg-destructive'
-                                : factor.severity === 'high'
-                                  ? 'bg-orange-500'
-                                  : factor.severity === 'medium'
-                                    ? 'bg-yellow-500'
-                                    : 'bg-blue-500'
-                            }
-                          >
-                            {factor.severity}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>{formatNumber(factor.count)}</TableCell>
-                        <TableCell className='font-semibold'>{formatNumber(factor.impactScore)}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              ) : (
-                <p className='text-sm text-muted-foreground'>No risk factors detected</p>
-              )}
-            </DataState>
-          </CardContent>
-        </Card>
-
-        {/* High Risk Assets */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Highest Risk Assets</CardTitle>
-            <CardDescription>Assets requiring immediate attention</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <DataState isLoading={isLoading} error={error} isEmpty={!data?.highestRiskAssets?.length}>
-              {data?.highestRiskAssets && data.highestRiskAssets.length > 0 ? (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Asset</TableHead>
-                      <TableHead>Tenant</TableHead>
-                      <TableHead>Risk Score</TableHead>
-                      <TableHead>Top Issue</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {data.highestRiskAssets.map((asset, idx) => (
-                      <TableRow key={idx}>
-                        <TableCell className='font-medium'>{asset.name}</TableCell>
-                        <TableCell className='text-sm'>{asset.tenant}</TableCell>
-                        <TableCell>
-                          <Badge className='bg-destructive'>{asset.score}/100</Badge>
-                        </TableCell>
-                        <TableCell className='text-sm text-muted-foreground'>{asset.topIssue}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              ) : (
-                <p className='text-sm text-muted-foreground'>No high risk assets</p>
-              )}
-            </DataState>
-          </CardContent>
-        </Card>
-      </div>
+          )
+        }}
+      </DataState>
     </>
   )
 }

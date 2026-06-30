@@ -3,6 +3,7 @@ import { titleCase } from "@/lib/format"
 import type {
   AckStatus,
   ConnectorStatus,
+  ControlStatus,
   HealthStatus,
   JobStatus,
   PqcReadiness,
@@ -148,6 +149,28 @@ export function RiskBadge({
   return (
     <Pill tone={tone} dot>
       {titleCase(band)}
+    </Pill>
+  )
+}
+
+const controlTone: Record<ControlStatus, Tone> = {
+  pass: "success",
+  fail: "critical",
+  exception: "warning",
+  not_assessed: "neutral",
+}
+
+const controlLabel: Record<ControlStatus, string> = {
+  pass: "Pass",
+  fail: "Fail",
+  exception: "Exception",
+  not_assessed: "Not Assessed",
+}
+
+export function ControlStatusBadge({ status }: { status: ControlStatus }) {
+  return (
+    <Pill tone={controlTone[status]} dot>
+      {controlLabel[status]}
     </Pill>
   )
 }

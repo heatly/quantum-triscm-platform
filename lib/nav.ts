@@ -31,50 +31,50 @@ export const navGroups: NavGroup[] = [
   {
     label: "Posture",
     items: [
-      { title: "Overview", href: "/", icon: LayoutDashboard, description: "Program-wide quantum posture summary" },
-      { title: "Tenants", href: "/tenants", icon: Building2, description: "Onboarding, connectors, and scope" },
+      { title: "Overview", href: "/app/overview", icon: LayoutDashboard, description: "Program-wide quantum posture summary" },
+      { title: "Tenants", href: "/app/tenants", icon: Building2, description: "Onboarding, connectors, and scope" },
     ],
   },
   {
     label: "Discovery & Inventory",
     items: [
-      { title: "Discovery", href: "/discovery", icon: Radar, description: "Scan jobs, logs, and source coverage" },
-      { title: "Inventory", href: "/inventory", icon: Boxes, description: "Searchable cryptographic asset inventory" },
+      { title: "Discovery", href: "/app/discovery", icon: Radar, description: "Scan jobs, logs, and source coverage" },
+      { title: "Inventory", href: "/app/inventory", icon: Boxes, description: "Searchable cryptographic asset inventory" },
     ],
   },
   {
     label: "Analysis",
     items: [
-      { title: "Risk", href: "/risk", icon: ShieldAlert, description: "Quantum risk scoring and prioritization" },
-      { title: "Compliance", href: "/compliance", icon: ClipboardCheck, description: "Framework alignment and exceptions" },
+      { title: "Risk", href: "/app/risk", icon: ShieldAlert, description: "Quantum risk scoring and prioritization" },
+      { title: "Compliance", href: "/app/compliance", icon: ClipboardCheck, description: "Framework alignment and exceptions" },
     ],
   },
   {
     label: "Operations",
     items: [
-      { title: "Monitoring", href: "/monitoring", icon: Activity, description: "Continuous monitoring and alerting" },
-      { title: "CT Monitor", href: "/ct-monitor", icon: ScanEye, description: "Certificate Transparency surveillance" },
+      { title: "Monitoring", href: "/app/monitoring", icon: Activity, description: "Continuous monitoring and alerting" },
+      { title: "CT Monitor", href: "/app/ct-monitor", icon: ScanEye, description: "Certificate Transparency surveillance" },
     ],
   },
   {
     label: "Cryptography",
     items: [
-      { title: "PQ Lab", href: "/pq-lab", icon: FlaskConical, description: "Post-quantum benchmarking and protocol lab" },
-      { title: "Trust Graph", href: "/trust-graph", icon: Share2, description: "Dependency and blast-radius analysis" },
+      { title: "PQ Lab", href: "/app/pqlab", icon: FlaskConical, description: "Post-quantum benchmarking and protocol lab" },
+      { title: "Trust Graph", href: "/app/trust-graph", icon: Share2, description: "Dependency and blast-radius analysis" },
     ],
   },
   {
     label: "Orchestration",
     items: [
-      { title: "Remediation", href: "/remediation", icon: Wrench, description: "Workflow-driven remediation queue" },
-      { title: "Migration Planner", href: "/migration", icon: Route, description: "Phased PQC migration roadmap" },
+      { title: "Remediation", href: "/app/remediation", icon: Wrench, description: "Workflow-driven remediation queue" },
+      { title: "Migration Planner", href: "/app/migration", icon: Route, description: "Phased PQC migration roadmap" },
     ],
   },
 ]
 
 export const settingsItem: NavItem = {
   title: "Settings",
-  href: "/settings",
+  href: "/app/settings",
   icon: Settings,
   description: "Connectors, users, policies, and audit",
 }

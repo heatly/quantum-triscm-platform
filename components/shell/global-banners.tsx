@@ -28,7 +28,7 @@ export function GlobalBanners() {
             {erroredConnectors.map((c) => c.name).join(", ")}
           </span>
           <Link
-            href="/tenants"
+            href="/app/tenants"
             className="ml-auto shrink-0 font-medium underline underline-offset-4 hover:opacity-80"
           >
             Review connectors
@@ -43,7 +43,7 @@ export function GlobalBanners() {
             {runningJobs.length > 1 ? "s" : ""} in progress
           </span>
           <Link
-            href="/discovery"
+            href="/app/discovery"
             className="ml-auto shrink-0 font-medium underline underline-offset-4 hover:opacity-80"
           >
             View jobs

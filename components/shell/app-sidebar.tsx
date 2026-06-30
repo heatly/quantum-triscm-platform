@@ -21,13 +21,13 @@ export function AppSidebar() {
   const pathname = usePathname()
 
   const isActive = (href: string) =>
-    href === "/" ? pathname === "/" : pathname.startsWith(href)
+    pathname === href || pathname.startsWith(href + "/")
 
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader>
         <Link
-          href="/"
+          href="/app/overview"
           className="flex items-center gap-2.5 px-1 py-1.5 group-data-[collapsible=icon]:justify-center"
         >
           <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">

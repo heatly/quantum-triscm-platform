@@ -86,6 +86,13 @@ export default function RiskPage() {
             .map((e) => ({ label: e.label, avg: Math.round(e.total / Math.max(e.count, 1)) }))
             .sort((a, b) => b.avg - a.avg)
 
+          // Scoring model dimensions (label + weight) derived from the data
+          const scoringModel = sorted[0]?.dimensions
+            ? [...sorted[0].dimensions].sort((a, b) => b.weight - a.weight)
+            : []
+
+          const topFive = sorted.slice(0, 5)
+
           return (
             <div className="flex flex-col gap-4">
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -94,6 +101,67 @@ export default function RiskPage() {
                 <KPICard title="Internet Exposed" value={formatNumber(exposed)} icon={Activity} status="info" />
                 <KPICard title="Scored Assets" value={formatNumber(scores.length)} icon={TrendingDown} status="default" />
               </div>
+
+              <div>
+                <h2 className="mb-2 font-heading text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                  Top Quantum Risk Assets
+                </h2>
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                  {topFive.map((asset) => (
+                    <Card key={asset.assetId} className="gap-0 py-0">
+                      <CardContent className="flex flex-col gap-3 p-4">
+                        <div className="flex items-start justify-between gap-2">
+                          <span className="truncate text-sm font-medium" title={asset.assetName}>
+                            {asset.assetName}
+                          </span>
+                          <RiskBadge band={asset.band} />
+                        </div>
+                        <div className="flex items-end justify-between">
+                          <span className="font-heading text-3xl font-semibold tabular-nums tracking-tight">
+                            {asset.totalScore}
+                          </span>
+                          <span className="text-xs text-muted-foreground">/100</span>
+                        </div>
+                        <Progress value={asset.totalScore} className="h-1.5" />
+                        <span className="truncate text-xs text-muted-foreground" title={asset.rationale}>
+                          {asset.rationale}
+                        </span>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </div>
+
+              {scoringModel.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Quantum Risk Scoring Model</CardTitle>
+                    <CardDescription>
+                      Weighted dimensions combined into each asset&apos;s 0–100 quantum risk score
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                      {scoringModel.map((dim) => (
+                        <div
+                          key={dim.key}
+                          className="flex flex-col gap-1 rounded-lg border border-border p-3"
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-medium">{dim.label}</span>
+                            <Badge variant="secondary" className="tabular-nums">
+                              {Math.round(dim.weight * 100)}%
+                            </Badge>
+                          </div>
+                          <span className="text-xs text-muted-foreground">
+                            Weight in composite risk score
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
 
               <div className="grid gap-4 lg:grid-cols-2">
                 <Card>

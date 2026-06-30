@@ -19,7 +19,7 @@ import {
   YAxis,
   CartesianGrid,
 } from 'recharts'
-import { Boxes, Globe, ShieldAlert, Wrench } from 'lucide-react'
+import { Boxes, Globe, ShieldAlert, Wrench, FileWarning, KeyRound, ShieldCheck, PlugZap } from 'lucide-react'
 import { formatNumber, relativeTime } from '@/lib/format'
 
 const growthConfig = {
@@ -49,9 +49,9 @@ export default function OverviewPage() {
           const { kpis } = overview
           return (
             <div className="flex flex-col gap-4">
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <KPICard
-                  title="Crypto Assets"
+                  title="Total Crypto Assets"
                   value={formatNumber(kpis.totalCryptoAssets)}
                   icon={Boxes}
                   status="info"
@@ -63,16 +63,40 @@ export default function OverviewPage() {
                   status="warning"
                 />
                 <KPICard
-                  title="Active Alerts"
-                  value={formatNumber(kpis.activeAlerts)}
-                  icon={ShieldAlert}
+                  title="Expiring Certificates"
+                  value={formatNumber(kpis.expiringCertificates)}
+                  icon={FileWarning}
+                  status="warning"
+                />
+                <KPICard
+                  title="Deprecated Algorithms"
+                  value={formatNumber(kpis.deprecatedAlgorithms)}
+                  icon={KeyRound}
                   status="critical"
+                />
+                <KPICard
+                  title="PQ-Ready Assets"
+                  value={formatNumber(kpis.pqReadyAssets)}
+                  icon={ShieldCheck}
+                  status="success"
                 />
                 <KPICard
                   title="Open Remediations"
                   value={formatNumber(kpis.openRemediationTasks)}
                   icon={Wrench}
                   status="default"
+                />
+                <KPICard
+                  title="Active Alerts"
+                  value={formatNumber(kpis.activeAlerts)}
+                  icon={ShieldAlert}
+                  status="critical"
+                />
+                <KPICard
+                  title="Connector Health"
+                  value={`${kpis.connectorsHealthy}/${kpis.connectorsTotal}`}
+                  icon={PlugZap}
+                  status={kpis.connectorsHealthy === kpis.connectorsTotal ? 'success' : 'warning'}
                 />
               </div>
 
@@ -87,7 +111,14 @@ export default function OverviewPage() {
                       <AreaChart data={overview.assetGrowth} margin={{ left: 4, right: 12, top: 8 }}>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} />
                         <XAxis dataKey="date" tickLine={false} axisLine={false} tickMargin={8} />
-                        <YAxis tickLine={false} axisLine={false} width={36} />
+                        <YAxis
+                          tickLine={false}
+                          axisLine={false}
+                          width={44}
+                          tickFormatter={(v: number) =>
+                            v >= 1000 ? `${(v / 1000).toFixed(0)}k` : `${v}`
+                          }
+                        />
                         <ChartTooltip content={<ChartTooltipContent />} />
                         <Area
                           type="monotone"

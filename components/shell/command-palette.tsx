@@ -62,7 +62,7 @@ export function CommandPalette() {
               value={`tenant ${t.name}`}
               onSelect={() => {
                 setTenantId(t.id)
-                go("/tenants")
+                go("/app/tenants")
               }}
             >
               <span>{t.name}</span>
@@ -80,7 +80,7 @@ export function CommandPalette() {
             <CommandItem
               key={a.id}
               value={`asset ${a.name} ${a.id}`}
-              onSelect={() => go("/inventory")}
+              onSelect={() => go("/app/inventory")}
             >
               <span className="truncate">{a.name}</span>
               <span className="ml-auto text-xs text-muted-foreground">
@@ -97,7 +97,7 @@ export function CommandPalette() {
             <CommandItem
               key={t.id}
               value={`task ${t.title}`}
-              onSelect={() => go("/remediation")}
+              onSelect={() => go("/app/remediation")}
             >
               <span className="truncate">{t.title}</span>
             </CommandItem>
